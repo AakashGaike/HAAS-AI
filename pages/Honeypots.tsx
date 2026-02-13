@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { MOCK_HONEYPOTS } from '../constants'; // Keep as fallback if DB empty
-import { Power, Trash2, RefreshCw, Terminal, Plus, X } from 'lucide-react';
+import { MOCK_HONEYPOTS, MOCK_DECEPTION_PROFILES } from '../constants'; 
+import { Power, Trash2, RefreshCw, Terminal, Plus, X, Server, Shield, Globe, Fingerprint } from 'lucide-react';
 import { db, isDemoMode } from '../services/firebase';
 import { collection, onSnapshot, doc, deleteDoc, updateDoc, addDoc, serverTimestamp } from 'firebase/firestore';
 import { Honeypot, HoneypotStatus, HoneypotType } from '../types';
@@ -9,10 +9,30 @@ export const Honeypots: React.FC = () => {
   const [honeypots, setHoneypots] = useState<Honeypot[]>([]);
   const [loading, setLoading] = useState(true);
   const [deployModalOpen, setDeployModalOpen] = useState(false);
-  const [deployConfig, setDeployConfig] = useState({ name: '', type: HoneypotType.SSH, region: 'us-east-1' });
+  
+  // Deployment Config State with Ports & Profile
+  const [deployConfig, setDeployConfig] = useState({ 
+      name: '', 
+      type: HoneypotType.SSH, 
+      region: 'us-east-1',
+      port: 2222,
+      profileId: MOCK_DECEPTION_PROFILES[0].id
+  });
+  
   const [actionLoading, setActionLoading] = useState<string | null>(null);
 
-  // Real-time subscription to honeypots
+  useEffect(() => {
+      let defaultPort = 2222;
+      switch(deployConfig.type) {
+          case HoneypotType.HTTP: defaultPort = 8080; break;
+          case HoneypotType.DATABASE: defaultPort = 5432; break;
+          case HoneypotType.RDP: defaultPort = 3389; break;
+          case HoneypotType.REDIS: defaultPort = 6379; break;
+          case HoneypotType.ELASTIC: defaultPort = 9200; break;
+      }
+      setDeployConfig(prev => ({ ...prev, port: defaultPort }));
+  }, [deployConfig.type]);
+
   useEffect(() => {
     if (isDemoMode()) {
         setHoneypots(MOCK_HONEYPOTS);
@@ -28,7 +48,7 @@ export const Honeypots: React.FC = () => {
       },
       (error) => {
         console.error("Failed to fetch honeypots:", error);
-        setHoneypots(MOCK_HONEYPOTS); // Fallback
+        setHoneypots(MOCK_HONEYPOTS);
         setLoading(false);
       }
     );
@@ -36,43 +56,41 @@ export const Honeypots: React.FC = () => {
     return () => unsubscribe();
   }, []);
 
-  // Deploy Action
   const handleDeploy = async () => {
     try {
       setActionLoading('deploy');
       
+      const newPotData = {
+          name: deployConfig.name || `Wolf-${deployConfig.type}-${Math.floor(Math.random()*1000)}`,
+          type: deployConfig.type,
+          region: deployConfig.region,
+          port: deployConfig.port,
+          profileId: deployConfig.profileId,
+          status: HoneypotStatus.DEPLOYING,
+          uptime: '0s',
+          attacks24h: 0,
+          createdAt: serverTimestamp()
+      };
+
       if (isDemoMode()) {
-        // Simulating backend call in demo mode
         const newPot: Honeypot = {
             id: `hp-${Date.now()}`,
-            name: deployConfig.name || `New-${deployConfig.type}-Node`,
-            type: deployConfig.type,
-            region: deployConfig.region,
+            ...newPotData,
             status: HoneypotStatus.DEPLOYING,
             uptime: '0s',
             attacks24h: 0
-        };
+        } as Honeypot;
+
         setHoneypots(prev => [...prev, newPot]);
         setTimeout(() => {
             setHoneypots(prev => prev.map(p => p.id === newPot.id ? { ...p, status: HoneypotStatus.ACTIVE } : p));
-        }, 3000);
+        }, 2000);
       } else {
-        // Actual backend call via API or direct Firestore write for prototype
-        // In real app, call: await fetch('/api/deploy', ...)
-        // For direct firestore prototype:
-        await addDoc(collection(db, "honeypots"), {
-            name: deployConfig.name || `New-${deployConfig.type}-Node`,
-            type: deployConfig.type,
-            region: deployConfig.region,
-            status: HoneypotStatus.DEPLOYING,
-            uptime: '0s',
-            attacks24h: 0,
-            createdAt: serverTimestamp()
-        });
+        await addDoc(collection(db, "honeypots"), newPotData);
       }
       
       setDeployModalOpen(false);
-      setDeployConfig({ name: '', type: HoneypotType.SSH, region: 'us-east-1' });
+      setDeployConfig({ name: '', type: HoneypotType.SSH, region: 'us-east-1', port: 2222, profileId: MOCK_DECEPTION_PROFILES[0].id });
     } catch (err) {
       console.error("Deploy failed:", err);
       alert("Deployment failed. Check console.");
@@ -81,7 +99,6 @@ export const Honeypots: React.FC = () => {
     }
   };
 
-  // Stop/Restart Action
   const handleStatusChange = async (id: string, newStatus: HoneypotStatus) => {
     try {
         setActionLoading(id);
@@ -99,10 +116,8 @@ export const Honeypots: React.FC = () => {
     }
   };
 
-  // Delete Action
   const handleDelete = async (id: string) => {
       if(!confirm("Are you sure you want to decommission this honeypot?")) return;
-      
       try {
           setActionLoading(id);
           if (isDemoMode()) {
@@ -117,59 +132,65 @@ export const Honeypots: React.FC = () => {
       }
   };
 
-  if (loading) return <div className="text-cyber-400 p-8">Loading Fleet Data...</div>;
+  if (loading) return <div className="text-wolf-400 p-8 font-mono animate-pulse">INITIALIZING FLEET DATA...</div>;
 
   return (
     <div className="space-y-6 relative">
-       {/* Header & Actions */}
        <div className="flex justify-between items-center">
         <div>
-          <h2 className="text-3xl font-bold text-white">Honeypot Management</h2>
-          <p className="text-slate-400 mt-1">Deploy and monitor deception nodes</p>
+          <h2 className="text-3xl font-bold text-white tracking-tight">Honeypot Fleet</h2>
+          <p className="text-wolf-400 mt-1 text-sm font-mono">Managed Deception Nodes: <span className="text-white">{honeypots.length}</span></p>
         </div>
         <button 
             onClick={() => setDeployModalOpen(true)}
-            className="bg-cyber-500 hover:bg-emerald-400 text-black font-bold py-2 px-6 rounded-lg transition-colors shadow-lg shadow-emerald-900/20 flex items-center gap-2"
+            className="bg-red-gradient hover:shadow-neon transition-all duration-300 text-white font-bold py-3 px-6 rounded flex items-center gap-2 border border-wolf-red uppercase tracking-wider text-sm clip-hex"
         >
-            <Terminal size={18} />
-            Deploy New Node
+            <Plus size={16} />
+            Deploy Node
         </button>
       </div>
 
-      {/* Grid */}
-      <div className="grid grid-cols-1 gap-6">
+      <div className="grid grid-cols-1 gap-4">
         {honeypots.map((pot) => (
-          <div key={pot.id} className="bg-cyber-800 border border-cyber-700 rounded-xl p-6 flex flex-col md:flex-row items-center justify-between gap-6 hover:border-cyber-600 transition-all">
+          <div key={pot.id} className="bg-wolf-800 border border-wolf-700 rounded p-6 flex flex-col md:flex-row items-center justify-between gap-6 hover:border-wolf-red/40 transition-all group relative overflow-hidden">
             
+            <div className={`absolute left-0 top-0 bottom-0 w-1 ${
+                pot.status === 'ACTIVE' ? 'bg-wolf-red shadow-[0_0_10px_#FF1E1E]' : 
+                pot.status === 'COMPROMISED' ? 'bg-purple-500 animate-pulse' : 
+                'bg-wolf-600'
+            }`}></div>
+
             <div className="flex items-center gap-6 flex-1">
-              <div className={`w-3 h-24 rounded-full transition-colors duration-500 ${
-                pot.status === 'ACTIVE' ? 'bg-cyber-500 shadow-[0_0_15px_rgba(16,185,129,0.5)]' : 
-                pot.status === 'COMPROMISED' ? 'bg-cyber-200 shadow-[0_0_15px_rgba(239,68,68,0.5)]' : 
-                pot.status === 'DEPLOYING' ? 'bg-yellow-500 animate-pulse' : 'bg-cyber-700'
-              }`}></div>
+              <div className="p-4 bg-wolf-900 rounded border border-wolf-700 text-wolf-red">
+                 <Server size={24} />
+              </div>
               
               <div>
                 <div className="flex items-center gap-3">
-                  <h3 className="text-xl font-bold text-white">{pot.name}</h3>
-                  <span className={`text-xs px-2 py-0.5 rounded border ${
-                    pot.status === 'ACTIVE' ? 'bg-emerald-900/30 border-emerald-800 text-emerald-400' :
-                    pot.status === 'COMPROMISED' ? 'bg-red-900/30 border-red-800 text-red-400 animate-pulse' :
+                  <h3 className="text-lg font-bold text-white tracking-wide">{pot.name}</h3>
+                  <span className={`text-[10px] px-2 py-0.5 rounded border uppercase tracking-wider font-bold ${
+                    pot.status === 'ACTIVE' ? 'bg-wolf-red/10 border-wolf-red text-wolf-red' :
+                    pot.status === 'COMPROMISED' ? 'bg-purple-900/30 border-purple-500 text-purple-400 animate-pulse' :
                     pot.status === 'DEPLOYING' ? 'bg-yellow-900/30 border-yellow-800 text-yellow-400' :
-                    'bg-zinc-800 border-zinc-700 text-zinc-400'
+                    'bg-wolf-700 border-wolf-600 text-wolf-400'
                   }`}>
                     {pot.status}
                   </span>
                 </div>
-                <div className="flex items-center gap-6 mt-3 text-sm text-cyber-600">
+                <div className="flex items-center gap-6 mt-3 text-xs text-wolf-400 font-mono">
                   <span className="flex items-center gap-2">
-                     <span className="w-2 h-2 rounded-full bg-cyber-600"></span>
+                     <Shield size={12} />
                      {pot.type}
                   </span>
                   <span className="flex items-center gap-2">
-                     <span className="w-2 h-2 rounded-full bg-cyber-600"></span>
-                     {pot.region}
+                     <Terminal size={12} />
+                     PORT: {pot.port}
                   </span>
-                  <span className="flex items-center gap-2 text-cyber-300 font-mono">
+                  <span className="flex items-center gap-2 text-wolf-300">
+                     <Fingerprint size={12} />
+                     {pot.profileId ? 'ADAPTIVE' : 'STATIC'}
+                  </span>
+                  <span className="text-wolf-300">
                      UPTIME: {pot.uptime}
                   </span>
                 </div>
@@ -178,100 +199,89 @@ export const Honeypots: React.FC = () => {
 
             <div className="flex items-center gap-8">
                <div className="text-right hidden md:block">
-                  <div className="text-2xl font-bold text-white">{pot.attacks24h}</div>
-                  <div className="text-xs text-cyber-600 uppercase tracking-wider">Attacks (24h)</div>
+                  <div className="text-xl font-bold text-white font-mono">{pot.attacks24h}</div>
+                  <div className="text-[10px] text-wolf-500 uppercase tracking-wider">Events (24h)</div>
                </div>
 
                <div className="flex items-center gap-2">
-                  <button 
-                    onClick={() => handleStatusChange(pot.id, HoneypotStatus.ACTIVE)}
-                    disabled={actionLoading === pot.id}
-                    title="Restart" 
-                    className="p-2 text-cyber-600 hover:text-white hover:bg-cyber-700 rounded-lg transition-colors disabled:opacity-50"
-                  >
-                     <RefreshCw size={18} className={actionLoading === pot.id ? "animate-spin" : ""} />
-                  </button>
-                  <button 
-                    onClick={() => handleStatusChange(pot.id, HoneypotStatus.OFFLINE)}
-                    disabled={actionLoading === pot.id}
-                    title="Stop" 
-                    className="p-2 text-cyber-600 hover:text-cyber-200 hover:bg-red-900/20 rounded-lg transition-colors disabled:opacity-50"
-                  >
-                     <Power size={18} />
-                  </button>
-                  <button 
-                    onClick={() => handleDelete(pot.id)}
-                    disabled={actionLoading === pot.id}
-                    title="Delete" 
-                    className="p-2 text-cyber-600 hover:text-red-500 hover:bg-red-900/20 rounded-lg transition-colors disabled:opacity-50"
-                  >
-                     <Trash2 size={18} />
-                  </button>
+                  <button onClick={() => handleStatusChange(pot.id, HoneypotStatus.ACTIVE)} disabled={actionLoading === pot.id} className="p-2 text-wolf-500 hover:text-white hover:bg-wolf-700 rounded transition-colors"><RefreshCw size={18} className={actionLoading === pot.id ? "animate-spin" : ""} /></button>
+                  <button onClick={() => handleStatusChange(pot.id, HoneypotStatus.OFFLINE)} disabled={actionLoading === pot.id} className="p-2 text-wolf-500 hover:text-wolf-red hover:bg-wolf-red/10 rounded transition-colors"><Power size={18} /></button>
+                  <button onClick={() => handleDelete(pot.id)} disabled={actionLoading === pot.id} className="p-2 text-wolf-500 hover:text-red-500 hover:bg-red-900/20 rounded transition-colors"><Trash2 size={18} /></button>
                </div>
             </div>
           </div>
         ))}
-        {honeypots.length === 0 && (
-            <div className="text-center py-20 bg-cyber-800/50 rounded-xl border border-dashed border-cyber-700">
-                <p className="text-cyber-600">No active honeypots. Deploy one to start capturing threats.</p>
-            </div>
-        )}
       </div>
 
-      {/* Deploy Modal */}
       {deployModalOpen && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
-              <div className="bg-cyber-800 w-full max-w-md border border-cyber-600 rounded-xl shadow-2xl p-6">
-                  <div className="flex justify-between items-center mb-6">
-                      <h3 className="text-xl font-bold text-white">Deploy Honeypot</h3>
-                      <button onClick={() => setDeployModalOpen(false)} className="text-slate-400 hover:text-white"><X size={24}/></button>
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/90 backdrop-blur-sm p-4">
+              <div className="bg-wolf-900 w-full max-w-lg border border-wolf-red/30 rounded-lg shadow-neon p-8 relative overflow-hidden">
+                  <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-wolf-red to-transparent"></div>
+                  
+                  <div className="flex justify-between items-center mb-8">
+                      <h3 className="text-2xl font-bold text-white font-mono uppercase tracking-widest">Deploy Node</h3>
+                      <button onClick={() => setDeployModalOpen(false)} className="text-wolf-500 hover:text-white"><X size={24}/></button>
                   </div>
                   
-                  <div className="space-y-4">
+                  <div className="space-y-6">
                       <div>
-                          <label className="block text-sm font-medium text-slate-400 mb-1">Hostname</label>
+                          <label className="block text-xs font-bold text-wolf-400 mb-2 uppercase tracking-wider">Node Hostname</label>
                           <input 
                             type="text" 
-                            className="w-full bg-cyber-900 border border-cyber-700 rounded-lg p-2.5 text-white focus:border-cyber-400 outline-none"
-                            placeholder="e.g. auth-service-prod"
+                            className="w-full bg-wolf-950 border border-wolf-700 rounded p-3 text-white focus:border-wolf-red outline-none font-mono text-sm"
                             value={deployConfig.name}
                             onChange={(e) => setDeployConfig({...deployConfig, name: e.target.value})}
                           />
                       </div>
-                      <div>
-                          <label className="block text-sm font-medium text-slate-400 mb-1">Type</label>
-                          <select 
-                            className="w-full bg-cyber-900 border border-cyber-700 rounded-lg p-2.5 text-white focus:border-cyber-400 outline-none"
-                            value={deployConfig.type}
-                            onChange={(e) => setDeployConfig({...deployConfig, type: e.target.value as HoneypotType})}
-                          >
-                              {Object.values(HoneypotType).map(t => <option key={t} value={t}>{t}</option>)}
-                          </select>
+                      
+                      <div className="grid grid-cols-2 gap-4">
+                        <div>
+                            <label className="block text-xs font-bold text-wolf-400 mb-2 uppercase tracking-wider">Service Type</label>
+                            <select 
+                                className="w-full bg-wolf-950 border border-wolf-700 rounded p-3 text-white focus:border-wolf-red outline-none font-mono text-sm"
+                                value={deployConfig.type}
+                                onChange={(e) => setDeployConfig({...deployConfig, type: e.target.value as HoneypotType})}
+                            >
+                                {Object.values(HoneypotType).map(t => <option key={t} value={t}>{t}</option>)}
+                            </select>
+                        </div>
+                        <div>
+                            <label className="block text-xs font-bold text-wolf-400 mb-2 uppercase tracking-wider">Exposure Port</label>
+                            <input 
+                                type="number"
+                                className="w-full bg-wolf-950 border border-wolf-700 rounded p-3 text-white focus:border-wolf-red outline-none font-mono text-sm"
+                                value={deployConfig.port}
+                                onChange={(e) => setDeployConfig({...deployConfig, port: parseInt(e.target.value)})}
+                            />
+                        </div>
                       </div>
+
                       <div>
-                          <label className="block text-sm font-medium text-slate-400 mb-1">Region</label>
+                          <label className="block text-xs font-bold text-wolf-400 mb-2 uppercase tracking-wider">Adaptive Profile</label>
                           <select 
-                            className="w-full bg-cyber-900 border border-cyber-700 rounded-lg p-2.5 text-white focus:border-cyber-400 outline-none"
-                            value={deployConfig.region}
-                            onChange={(e) => setDeployConfig({...deployConfig, region: e.target.value})}
+                            className="w-full bg-wolf-950 border border-wolf-700 rounded p-3 text-white focus:border-wolf-red outline-none font-mono text-sm"
+                            value={deployConfig.profileId}
+                            onChange={(e) => setDeployConfig({...deployConfig, profileId: e.target.value})}
                           >
-                              <option value="us-east-1">US East (N. Virginia)</option>
-                              <option value="eu-west-2">EU West (London)</option>
-                              <option value="ap-northeast-1">Asia Pacific (Tokyo)</option>
+                              {MOCK_DECEPTION_PROFILES.map(p => (
+                                  <option key={p.id} value={p.id}>{p.name} ({p.osFamily})</option>
+                              ))}
                           </select>
                       </div>
 
-                      <button 
-                        onClick={handleDeploy}
-                        disabled={actionLoading === 'deploy'}
-                        className="w-full mt-4 bg-cyber-500 hover:bg-emerald-400 text-black font-bold py-3 rounded-lg transition-colors flex justify-center items-center gap-2"
-                      >
-                          {actionLoading === 'deploy' ? (
-                             <>Deploying <RefreshCw className="animate-spin" size={18} /></>
-                          ) : (
-                             <>Initialize Deployment <Terminal size={18} /></>
-                          )}
-                      </button>
+                      <div className="pt-4">
+                        <button 
+                            onClick={handleDeploy}
+                            disabled={actionLoading === 'deploy'}
+                            className="w-full bg-red-gradient hover:shadow-neon-hover text-white font-bold py-4 rounded transition-all flex justify-center items-center gap-3 uppercase tracking-widest text-sm clip-hex"
+                        >
+                            {actionLoading === 'deploy' ? (
+                                <>Initializing <RefreshCw className="animate-spin" size={18} /></>
+                            ) : (
+                                <>Execute Deployment <Terminal size={18} /></>
+                            )}
+                        </button>
+                      </div>
                   </div>
               </div>
           </div>

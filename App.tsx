@@ -5,6 +5,7 @@ import { Dashboard } from './pages/Dashboard';
 import { Honeypots } from './pages/Honeypots';
 import { Threats } from './pages/Threats';
 import { Settings } from './pages/Settings';
+import { Deception } from './pages/Deception';
 import { Trap } from './pages/Trap';
 
 const App: React.FC = () => {
@@ -21,6 +22,7 @@ const App: React.FC = () => {
               <Route path="/" element={<Dashboard />} />
               <Route path="/honeypots" element={<Honeypots />} />
               <Route path="/threats" element={<Threats />} />
+              <Route path="/deception" element={<Deception />} />
               <Route path="/settings" element={<Settings />} />
               <Route path="*" element={<Navigate to="/" replace />} />
             </Routes>

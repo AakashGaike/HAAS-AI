@@ -7,29 +7,35 @@ interface StatCardProps {
   change?: string;
   trend?: 'up' | 'down' | 'neutral';
   icon: LucideIcon;
-  colorClass: string;
+  highlight?: boolean;
 }
 
-export const StatCard: React.FC<StatCardProps> = ({ title, value, change, trend, icon: Icon, colorClass }) => {
+export const StatCard: React.FC<StatCardProps> = ({ title, value, change, trend, icon: Icon, highlight }) => {
   return (
-    <div className="bg-cyber-800 border border-cyber-700 rounded-xl p-6 hover:border-cyber-600 transition-all duration-300 shadow-lg shadow-black/40">
-      <div className="flex items-start justify-between">
+    <div className={`relative overflow-hidden bg-wolf-800 border border-wolf-700 rounded-lg p-6 hover:border-wolf-red/50 transition-all duration-300 group ${highlight ? 'shadow-neon border-wolf-red/30' : 'shadow-lg'}`}>
+      {highlight && <div className="absolute inset-0 bg-wolf-red/5 pointer-events-none"></div>}
+      
+      <div className="flex items-start justify-between relative z-10">
         <div>
-          <p className="text-cyber-600 text-sm font-medium tracking-wide uppercase">{title}</p>
-          <h3 className="text-3xl font-bold text-white mt-2">{value}</h3>
+          <p className="text-wolf-400 text-xs font-bold tracking-widest uppercase mb-1">{title}</p>
+          <h3 className="text-3xl font-mono font-bold text-white tracking-tight">{value}</h3>
         </div>
-        <div className={`p-3 rounded-lg bg-opacity-10 ${colorClass.replace('text-', 'bg-')}`}>
-          <Icon className={colorClass} size={24} />
+        <div className={`p-3 rounded bg-wolf-900 border border-wolf-700 group-hover:border-wolf-red/50 transition-colors ${highlight ? 'text-wolf-red shadow-neon' : 'text-wolf-400 group-hover:text-wolf-red'}`}>
+          <Icon size={24} />
         </div>
       </div>
+      
       {change && (
-        <div className="mt-4 flex items-center text-sm">
-          <span className={`${trend === 'up' ? 'text-cyber-200' : 'text-cyber-500'} font-semibold`}>
-            {trend === 'up' ? '↑' : '↓'} {change}
+        <div className="mt-4 flex items-center text-xs font-mono relative z-10">
+          <span className={`${trend === 'up' ? 'text-wolf-red' : 'text-wolf-400'} font-bold flex items-center gap-1`}>
+            {trend === 'up' ? '▲' : '▼'} {change}
           </span>
-          <span className="text-slate-500 ml-2">vs last 24h</span>
+          <span className="text-wolf-600 ml-2">VS 24H AGO</span>
         </div>
       )}
+      
+      {/* Decorative corner accent */}
+      <div className="absolute bottom-0 right-0 w-8 h-8 bg-gradient-to-tl from-wolf-red/10 to-transparent clip-hex"></div>
     </div>
   );
 };
